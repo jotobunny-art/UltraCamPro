@@ -15,7 +15,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build with Namespace & Resource Fix
+      - name: Build with Robust App Build Fix
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           
@@ -68,13 +68,15 @@ jobs:
           android.nonTransitiveRClass=true
           EOF
           
-          # CORRECCIÓN CLAVE PARA processDebugResources: Inyección automática de namespace
-          APP_BUILD_FILE="$APP_PATH/build.gradle.kts"
-          if [ ! -f "$APP_BUILD_FILE" ]; then
-              APP_BUILD_FILE="$APP_PATH/build.gradle"
+          # PARCHE ROBUSTO PARA EL MÓDULO APP: Asegurar namespace y configuración correcta
+          APP_BUILD_GRADLE="$APP_PATH/build.gradle"
+          if [ ! -f "$APP_BUILD_GRADLE" ]; then
+              APP_BUILD_GRADLE="$APP_PATH/build.gradle.kts"
           fi
           
-          # Intentar extraer el package del AndroidManifest.xml si existe
+          echo "Archivo de configuración del módulo app encontrado en: $APP_BUILD_GRADLE"
+          
+          # Extraer paquete del AndroidManifest si existe
           MANIFEST_FILE="$APP_PATH/src/main/AndroidManifest.xml"
           PKG_NAME="com.ultracam.pro"
           if [ -f "$MANIFEST_FILE" ]; then
@@ -83,13 +85,14 @@ jobs:
                   PKG_NAME="$EXTRACTED_PKG"
               fi
           fi
-          echo "Namespace detectado/asignado: $PKG_NAME"
+          echo "Namespace configurado: $PKG_NAME"
           
-          # Inyectar el namespace dentro del bloque android {} si no lo tiene
-          if [ -f "$APP_BUILD_FILE" ]; then
-              if ! grep -q "namespace" "$APP_BUILD_FILE"; then
-                  echo "Inyectando namespace en $APP_BUILD_FILE"
-                  sed -i "/android {/a \    namespace = \"$PKG_NAME\"" "$APP_BUILD_FILE" || true
+          # Si el archivo existe, aseguramos que tenga el bloque android y el namespace
+          if [ -f "$APP_BUILD_GRADLE" ]; then
+              # Si no tiene namespace, lo agregamos dentro de android {
+              if ! grep -q "namespace" "$APP_BUILD_GRADLE"; then
+                  sed -i "/android {/a \    namespace '$PKG_NAME'" "$APP_BUILD_GRADLE" || true
+                  sed -i '/android {/a \    namespace = "'$PKG_NAME'"' "$APP_BUILD_GRADLE" || true
               fi
           fi
           
@@ -100,12 +103,12 @@ jobs:
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilación limpia y controlada
+          # Compilación limpia y controlada con volcado completo si falla
           ./gradlew clean assembleDebug --no-daemon --stacktrace > build_output.log 2>&1 || {
               echo "=========================================="
               echo "=== ERROR CRÍTICO DETECTADO EN GRADLE ==="
               echo "=========================================="
-              tail -n 80 build_output.log
+              tail -n 100 build_output.log
               
               FAILED_TASK=$(grep -m 1 "Execution failed for task" build_output.log || echo "Revisar logs detallados arriba")
               echo "::error::$FAILED_TASK"
