@@ -1,4 +1,4 @@
-name: Build Android APK from ZIP
+name: Build Android APK
 
 on: [push]
 
@@ -6,17 +6,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install Unzip
-        run: sudo apt-get update && sudo apt-get install -y unzip
-
-      - name: Unzip project files
-        run: |
-          unzip -o UltraCamPro.zip -d extracted_files
-          cp -r extracted_files/* . 2>/dev/null || true
-          ls -la
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -24,14 +15,19 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew || true
+      - name: Setup Gradle (Acción oficial de la comunidad)
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      - name: Extract project and build
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip
+          unzip -o UltraCamPro.zip -d extracted_app
+          cd $(find extracted_app -name "gradlew" -exec dirname {} \;)
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: '**/build/outputs/apk/debug/app-debug.apk'
