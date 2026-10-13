@@ -15,7 +15,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build and Print Specific Error
+      - name: Build and Target Real Compilation Error
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
@@ -68,14 +68,13 @@ jobs:
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilamos y extraemos el error real en las anotaciones
+          # Compilamos y filtramos el error real ignorando las tareas exitosas
           ./gradlew assembleDebug > build_output.log 2>&1 || {
-              echo "=== MOSTRANDO REGISTRO DE ERROR ==="
-              cat build_output.log | tail -n 80
+              echo "=== LOG DE ERROR REAL ==="
+              cat build_output.log | tail -n 60
               
-              # Extraemos la línea exacta de causa de error
-              SPECIFIC_ERR=$(grep -m 1 -E "> Task " build_output.log || echo "Revisar logs abajo")
-              echo "::error::Fallo en tarea: $SPECIFIC_ERR"
+              REAL_FAIL=$(grep -m 1 "Execution failed for task" build_output.log || grep -m 1 "error:" build_output.log || echo "Revisar salida arriba")
+              echo "::error::$REAL_FAIL"
               exit 1
           }
 
