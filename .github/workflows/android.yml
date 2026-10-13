@@ -15,7 +15,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build with AndroidX Fix
+      - name: Build and Print Specific Error
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
@@ -54,7 +54,7 @@ jobs:
           include(":app")
           EOF
           
-          # Configuramos gradle.properties para activar AndroidX y Jetifier y evitar el error
+          # Mantenemos la configuración de AndroidX y Jetifier
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
@@ -68,11 +68,14 @@ jobs:
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilamos y si falla, mostramos el error detallado
+          # Compilamos y extraemos el error real en las anotaciones
           ./gradlew assembleDebug > build_output.log 2>&1 || {
-              REAL_ERROR=$(grep -E "FAILURE:|Error:|A problem occurred|Execution failed" build_output.log | head -n 1)
-              echo "::error::Fallo en Gradle: $REAL_ERROR"
-              cat build_output.log | tail -n 50
+              echo "=== MOSTRANDO REGISTRO DE ERROR ==="
+              cat build_output.log | tail -n 80
+              
+              # Extraemos la línea exacta de causa de error
+              SPECIFIC_ERR=$(grep -m 1 -E "> Task " build_output.log || echo "Revisar logs abajo")
+              echo "::error::Fallo en tarea: $SPECIFIC_ERR"
               exit 1
           }
 
