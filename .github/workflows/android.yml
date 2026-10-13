@@ -53,7 +53,7 @@ jobs:
           
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
-          ./gradlew assembleDebug --info --stacktrace
+          ./gradlew assembleDebug --console=plain
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
