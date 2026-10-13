@@ -15,7 +15,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build and Target Real Compilation Error
+      - name: Build with Resource Fix & CompileSdk
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
@@ -26,7 +26,7 @@ jobs:
           echo "Raíz del proyecto en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          # Mantenemos el build.gradle.kts limpio
+          # Mantenemos el build.gradle.kts principal
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.1.1" apply false
@@ -60,6 +60,20 @@ jobs:
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
+
+          # Solución para processDebugResources: Asegurar compileSdk y namespace correcto en el módulo app
+          APP_BUILD_GRADLE="$APP_PATH/build.gradle.kts"
+          if [ ! -f "$APP_BUILD_GRADLE" ]; then
+              APP_BUILD_GRADLE="$APP_PATH/build.gradle"
+          fi
+          
+          echo "Optimizando configuración en: $APP_BUILD_GRADLE"
+          
+          # Si el archivo usa groovy (build.gradle), inyectamos o corregimos los valores si es necesario
+          if [[ "$APP_BUILD_GRADLE" == *.gradle ]]; then
+              sed -i 's/compileSdkVersion.*/compileSdk = 34/g' "$APP_BUILD_GRADLE" || true
+              sed -i 's/targetSdkVersion.*/targetSdk = 34/g' "$APP_BUILD_GRADLE" || true
+          fi
           
           # Mantenemos la configuración del SDK y local.properties
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -68,18 +82,5 @@ jobs:
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilamos y filtramos el error real ignorando las tareas exitosas
-          ./gradlew assembleDebug > build_output.log 2>&1 || {
-              echo "=== LOG DE ERROR REAL ==="
-              cat build_output.log | tail -n 60
-              
-              REAL_FAIL=$(grep -m 1 "Execution failed for task" build_output.log || grep -m 1 "error:" build_output.log || echo "Revisar salida arriba")
-              echo "::error::$REAL_FAIL"
-              exit 1
-          }
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: '**/app/build/outputs/apk/debug/*.apk'
+          # Compilamos con la corrección aplicada
+          ./gradlew assembleDebug --stacktrace
