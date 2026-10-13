@@ -25,7 +25,6 @@ jobs:
           echo "Raíz del proyecto en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          # Crear un build.gradle.kts raíz para soportar los plugins de Android
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.1.1" apply false
@@ -33,7 +32,6 @@ jobs:
           }
           EOF
 
-          # Crear settings.gradle.kts con repositorios completos
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -55,7 +53,7 @@ jobs:
           
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
