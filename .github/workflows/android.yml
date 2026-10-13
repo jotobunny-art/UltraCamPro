@@ -15,14 +15,20 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle (Acción oficial de la comunidad)
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Extract project and build
+      - name: Extract and Build
         run: |
           sudo apt-get update && sudo apt-get install -y unzip
           unzip -o UltraCamPro.zip -d extracted_app
-          cd $(find extracted_app -name "gradlew" -exec dirname {} \;)
+          
+          GRADLE_PATH=$(find . -name "gradlew" -type f | head -n 1)
+          if [ -z "$GRADLE_PATH" ]; then
+            echo "Error: gradlew not found!"
+            exit 1
+          fi
+          
+          GRADLE_DIR=$(dirname "$GRADLE_PATH")
+          echo "Found gradlew in: $GRADLE_DIR"
+          cd "$GRADLE_DIR"
           chmod +x gradlew
           ./gradlew assembleDebug
 
