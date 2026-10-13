@@ -15,7 +15,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build with Full Error Capture
+      - name: Build and Extract Real Error
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
@@ -61,10 +61,10 @@ jobs:
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilamos capturando la salida en un archivo para mostrar el error exacto si falla
+          # Compilamos y extraemos específicamente el mensaje de error de Gradle
           ./gradlew assembleDebug --stacktrace > build_output.log 2>&1 || {
-              echo "=== ERROR DETECTADO EN LA COMPILACIÓN ==="
-              tail -n 120 build_output.log
+              echo "=== MOTIVO EXACTO DEL FALLO ==="
+              grep -A 25 "What went wrong" build_output.log || head -n 100 build_output.log
               exit 1
           }
 
