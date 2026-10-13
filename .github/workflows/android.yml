@@ -53,7 +53,9 @@ jobs:
           
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
-          ./gradlew assembleDebug --warning-mode all
+          
+          # Ejecutar y capturar las últimas líneas de error si falla
+          ./gradlew assembleDebug --stacktrace || (echo "=== MOSTRANDO ERRORES DE LOG ===" && find . -name "*.log" -exec cat {} \;)
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
