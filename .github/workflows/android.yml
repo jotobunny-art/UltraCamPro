@@ -15,25 +15,24 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Comprehensive Android Build & Future-Proofing
+      - name: Build with Namespace & Resource Fix
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           
-          # Limpieza preventiva de archivos temporales
           rm -rf extracted_app build_output.log
           unzip -o UltraCamPro.zip -d extracted_app
           
-          # Detección dinámica y robusta de la ruta del proyecto
+          # Detección dinámica de la ruta del proyecto
           APP_PATH=$(find extracted_app -name "app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-              echo "::error::No se encontró la carpeta 'app' dentro del archivo ZIP."
+              echo "::error::No se encontró la carpeta 'app' en el ZIP."
               exit 1
           fi
           PROJECT_ROOT=$(dirname "$APP_PATH")
-          echo "Raíz del proyecto detectada en: $PROJECT_ROOT"
+          echo "Raíz del proyecto en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          # Configuración maestra del build.gradle.kts raíz
+          # Configuración del build.gradle.kts raíz
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.1.1" apply false
@@ -41,7 +40,7 @@ jobs:
           }
           EOF
 
-          # Configuración maestra del settings.gradle.kts con repositorios seguros
+          # settings.gradle.kts con repositorios seguros
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -61,7 +60,7 @@ jobs:
           include(":app")
           EOF
           
-          # gradle.properties universal con AndroidX, Jetifier y optimización de memoria
+          # gradle.properties universal con AndroidX, Jetifier y memoria
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
@@ -69,38 +68,49 @@ jobs:
           android.nonTransitiveRClass=true
           EOF
           
-          # Configuración de local.properties y variables de entorno del SDK
+          # CORRECCIÓN CLAVE PARA processDebugResources: Inyección automática de namespace
+          APP_BUILD_FILE="$APP_PATH/build.gradle.kts"
+          if [ ! -f "$APP_BUILD_FILE" ]; then
+              APP_BUILD_FILE="$APP_PATH/build.gradle"
+          fi
+          
+          # Intentar extraer el package del AndroidManifest.xml si existe
+          MANIFEST_FILE="$APP_PATH/src/main/AndroidManifest.xml"
+          PKG_NAME="com.ultracam.pro"
+          if [ -f "$MANIFEST_FILE" ]; then
+              EXTRACTED_PKG=$(grep -oP 'package="\K[^"]+' "$MANIFEST_FILE" || true)
+              if [ ! -z "$EXTRACTED_PKG" ]; then
+                  PKG_NAME="$EXTRACTED_PKG"
+              fi
+          fi
+          echo "Namespace detectado/asignado: $PKG_NAME"
+          
+          # Inyectar el namespace dentro del bloque android {} si no lo tiene
+          if [ -f "$APP_BUILD_FILE" ]; then
+              if ! grep -q "namespace" "$APP_BUILD_FILE"; then
+                  echo "Inyectando namespace en $APP_BUILD_FILE"
+                  sed -i "/android {/a \    namespace = \"$PKG_NAME\"" "$APP_BUILD_FILE" || true
+              fi
+          fi
+          
+          # Configuración del SDK y local.properties
           export ANDROID_HOME=/usr/local/lib/android/sdk
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
-          # Prevención de fallos en submódulos o dependencias internas
-          find . -name "build.gradle" -o -name "build.gradle.kts" | while read -r file; do
-              if ! grep -q "compileSdk" "$file" && ! grep -q "compileSdkVersion" "$file" && [[ "$file" == */app/* ]]; then
-                  echo "Asegurando compatibilidad en: $file"
-              fi
-          done
-
-          # Inicialización limpia de Gradle Wrapper
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Ejecución de limpieza previa para evitar conflictos de caché
-          ./gradlew clean --no-daemon
-          
-          # Compilación robusta con captura y reporte inteligente de errores
-          if ./gradlew assembleDebug --no-daemon --stacktrace > build_output.log 2>&1; then
-              echo "¡Compilación exitosa!"
-          else
+          # Compilación limpia y controlada
+          ./gradlew clean assembleDebug --no-daemon --stacktrace > build_output.log 2>&1 || {
               echo "=========================================="
               echo "=== ERROR CRÍTICO DETECTADO EN GRADLE ==="
               echo "=========================================="
               tail -n 80 build_output.log
               
-              # Extraer la tarea exacta que falló para las anotaciones
               FAILED_TASK=$(grep -m 1 "Execution failed for task" build_output.log || echo "Revisar logs detallados arriba")
               echo "::error::$FAILED_TASK"
               exit 1
-          fi
+          }
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
