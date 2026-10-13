@@ -25,10 +25,24 @@ jobs:
           echo "Raíz del proyecto en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
-            echo "Creando settings.gradle.kts..."
-            echo 'include(":app")' > settings.gradle.kts
-          fi
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "UltraCamPro"
+          include(":app")
+          EOF
           
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
