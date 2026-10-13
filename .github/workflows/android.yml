@@ -20,13 +20,11 @@ jobs:
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
           
-          # Buscar automáticamente dónde está settings.gradle.kts o build.gradle y entrar ahí
-          PROJECT_DIR=$(find extracted_app -name "build.gradle*" -o -name "settings.gradle*" | head -n 1 | xargs dirname)
-          echo "Directorio del proyecto encontrado en: $PROJECT_DIR"
-          cd "$PROJECT_DIR"
+          # Entrar a la raíz exacta del proyecto
+          cd extracted_app/UltraCamPro
           
-          # Crear gradlew y compilar
-          gradle wrapper
+          # Generar Wrapper moderno (Gradle 8.4) compatible con Java 17
+          gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew assembleDebug
 
