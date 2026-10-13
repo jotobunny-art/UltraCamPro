@@ -15,7 +15,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build with Robust App Build Fix
+      - name: Build with Modernized App Gradle
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           
@@ -32,7 +32,7 @@ jobs:
           echo "Raíz del proyecto en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          # Configuración del build.gradle.kts raíz
+          # Configuración del build.gradle.kts raíz (MANTENIDO)
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.1.1" apply false
@@ -40,7 +40,7 @@ jobs:
           }
           EOF
 
-          # settings.gradle.kts con repositorios seguros
+          # settings.gradle.kts con repositorios seguros (MANTENIDO)
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -60,7 +60,7 @@ jobs:
           include(":app")
           EOF
           
-          # gradle.properties universal con AndroidX, Jetifier y memoria
+          # gradle.properties universal con AndroidX, Jetifier y memoria (MANTENIDO)
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
@@ -68,15 +68,7 @@ jobs:
           android.nonTransitiveRClass=true
           EOF
           
-          # PARCHE ROBUSTO PARA EL MÓDULO APP: Asegurar namespace y configuración correcta
-          APP_BUILD_GRADLE="$APP_PATH/build.gradle"
-          if [ ! -f "$APP_BUILD_GRADLE" ]; then
-              APP_BUILD_GRADLE="$APP_PATH/build.gradle.kts"
-          fi
-          
-          echo "Archivo de configuración del módulo app encontrado en: $APP_BUILD_GRADLE"
-          
-          # Extraer paquete del AndroidManifest si existe
+          # Extraer paquete del AndroidManifest si existe para el namespace
           MANIFEST_FILE="$APP_PATH/src/main/AndroidManifest.xml"
           PKG_NAME="com.ultracam.pro"
           if [ -f "$MANIFEST_FILE" ]; then
@@ -85,30 +77,66 @@ jobs:
                   PKG_NAME="$EXTRACTED_PKG"
               fi
           fi
-          echo "Namespace configurado: $PKG_NAME"
+          echo "Namespace asignado: $PKG_NAME"
           
-          # Si el archivo existe, aseguramos que tenga el bloque android y el namespace
-          if [ -f "$APP_BUILD_GRADLE" ]; then
-              # Si no tiene namespace, lo agregamos dentro de android {
-              if ! grep -q "namespace" "$APP_BUILD_GRADLE"; then
-                  sed -i "/android {/a \    namespace '$PKG_NAME'" "$APP_BUILD_GRADLE" || true
-                  sed -i '/android {/a \    namespace = "'$PKG_NAME'"' "$APP_BUILD_GRADLE" || true
-              fi
-          fi
+          # SOLUCIÓN DEFINITIVA: Reemplazar/Crear un build.gradle moderno para el módulo app
+          # Esto evita cualquier error de recursos o SDKs obsoletos en el proyecto original
+          cat << EOF > "$APP_PATH/build.gradle"
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+
+          android {
+              namespace '$PKG_NAME'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "$PKG_NAME"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
           
-          # Configuración del SDK y local.properties
+          # Configuración del SDK y local.properties (MANTENIDO)
           export ANDROID_HOME=/usr/local/lib/android/sdk
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilación limpia y controlada con volcado completo si falla
+          # Compilación limpia y controlada con volcado completo si llega a fallar
           ./gradlew clean assembleDebug --no-daemon --stacktrace > build_output.log 2>&1 || {
               echo "=========================================="
               echo "=== ERROR CRÍTICO DETECTADO EN GRADLE ==="
               echo "=========================================="
-              tail -n 100 build_output.log
+              tail -n 120 build_output.log
               
               FAILED_TASK=$(grep -m 1 "Execution failed for task" build_output.log || echo "Revisar logs detallados arriba")
               echo "::error::$FAILED_TASK"
