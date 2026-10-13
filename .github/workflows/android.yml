@@ -15,7 +15,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build and Show Error in Annotations
+      - name: Build and Pinpoint Exact Error
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
@@ -61,11 +61,15 @@ jobs:
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilamos y si falla, enviamos el error exacto a las Annotations de GitHub
+          # Compilamos y enviamos la línea exacta del error a las anotaciones de GitHub
           ./gradlew assembleDebug > build_output.log 2>&1 || {
-              ERROR_MSG=$(grep -E "FAILURE:|Error:|A problem occurred|Execution failed" build_output.log | head -n 1)
-              echo "::error::$ERROR_MSG"
-              cat build_output.log | tail -n 50
+              echo "----------------------------------------"
+              cat build_output.log | grep -A 5 -B 2 "What went wrong" || cat build_output.log | tail -n 30
+              echo "----------------------------------------"
+              
+              # Forzamos una anotación con el error detectado
+              REAL_ERROR=$(grep -A 2 "What went wrong" build_output.log | tail -n 1)
+              echo "::error::Fallo en Gradle: $REAL_ERROR"
               exit 1
           }
 
