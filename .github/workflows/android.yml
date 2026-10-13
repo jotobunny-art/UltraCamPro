@@ -20,16 +20,12 @@ jobs:
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
           
-          # Entrar a la carpeta donde están los archivos del proyecto
+          # Entrar a la carpeta del proyecto y compilar directamente
           cd extracted_app/UltraCamPro
-          
-          # Generar gradlew automáticamente y compilar
-          gradle wrapper
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: '**/build/outputs/apk/debug/app-debug.apk'
+          path: '**/build/outputs/apk/debug/*.apk'
