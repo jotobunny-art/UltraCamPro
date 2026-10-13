@@ -15,12 +15,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build and Filter Exact Error
+      - name: Build with Full Error Capture
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
           
-          # Mantenemos todos los arreglos de ruta y estructura
+          # Mantenemos la detección automática de la ruta del proyecto
           APP_PATH=$(find extracted_app -name "app" -type d | head -n 1)
           PROJECT_ROOT=$(dirname "$APP_PATH")
           echo "Raíz del proyecto en: $PROJECT_ROOT"
@@ -61,10 +61,10 @@ jobs:
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilamos y si falla, filtramos para ver el error exacto en las primeras líneas
-          ./gradlew assembleDebug --stacktrace || {
-              echo "=== CAPTURANDO ERROR EXACTO ==="
-              ./gradlew assembleDebug --info | grep -E "FAILURE|Error:|A problem occurred|Execution failed" -A 5 -B 2
+          # Compilamos capturando la salida en un archivo para mostrar el error exacto si falla
+          ./gradlew assembleDebug --stacktrace > build_output.log 2>&1 || {
+              echo "=== ERROR DETECTADO EN LA COMPILACIÓN ==="
+              tail -n 120 build_output.log
               exit 1
           }
 
