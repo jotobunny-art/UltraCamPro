@@ -20,19 +20,16 @@ jobs:
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
           
-          # Localizar la carpeta 'app' y establecer la raíz del proyecto
           APP_PATH=$(find extracted_app -name "app" -type d | head -n 1)
           PROJECT_ROOT=$(dirname "$APP_PATH")
           echo "Raíz del proyecto en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          # Crear el archivo de configuración si no existe
           if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
             echo "Creando settings.gradle.kts..."
-            echo "include ':app'" > settings.gradle.kts
+            echo 'include(":app")' > settings.gradle.kts
           fi
           
-          # Generar Wrapper y compilar
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew assembleDebug
