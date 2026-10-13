@@ -15,18 +15,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Full Build & Stacktrace Error Capture
+      - name: Build and Filter Exact Error
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
           
-          # Detección automática de la ruta del proyecto
+          # Mantenemos todos los arreglos de ruta y estructura
           APP_PATH=$(find extracted_app -name "app" -type d | head -n 1)
           PROJECT_ROOT=$(dirname "$APP_PATH")
           echo "Raíz del proyecto en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          # Archivo build.gradle.kts con sintaxis correcta (espacios, sin '=')
+          # Mantenemos el build.gradle.kts limpio
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.1.1" apply false
@@ -34,7 +34,7 @@ jobs:
           }
           EOF
 
-          # Archivo settings.gradle.kts con repositorios y gestión de dependencias
+          # Mantenemos el settings.gradle.kts configurado
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -54,14 +54,19 @@ jobs:
           include(":app")
           EOF
           
-          # Configuración del entorno de Android SDK
+          # Mantenemos la configuración del SDK y local.properties
           export ANDROID_HOME=/usr/local/lib/android/sdk
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
-          # Inicialización de Gradle y compilación forzando el rastreo de errores
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          
+          # Compilamos y si falla, filtramos para ver el error exacto en las primeras líneas
+          ./gradlew assembleDebug --stacktrace || {
+              echo "=== CAPTURANDO ERROR EXACTO ==="
+              ./gradlew assembleDebug --info | grep -E "FAILURE|Error:|A problem occurred|Execution failed" -A 5 -B 2
+              exit 1
+          }
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
