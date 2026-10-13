@@ -15,131 +15,80 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build with Modernized App Gradle
+      - name: Validate and Build Project
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           
           rm -rf extracted_app build_output.log
           unzip -o UltraCamPro.zip -d extracted_app
           
-          # Detección dinámica de la ruta del proyecto
+          # Búsqueda estricta de la carpeta raíz del proyecto Android
           APP_PATH=$(find extracted_app -name "app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-              echo "::error::No se encontró la carpeta 'app' en el ZIP."
+              echo "::error::No se encontró ninguna carpeta llamada 'app' en el archivo ZIP."
               exit 1
           fi
+          
           PROJECT_ROOT=$(dirname "$APP_PATH")
-          echo "Raíz del proyecto en: $PROJECT_ROOT"
+          echo "Carpeta app encontrada en: $APP_PATH"
+          echo "Raíz del proyecto establecida en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          # Configuración del build.gradle.kts raíz (MANTENIDO)
-          cat << 'EOF' > build.gradle.kts
-          plugins {
-              id("com.android.application") version "8.1.1" apply false
-              id("org.jetbrains.kotlin.android") version "1.9.0" apply false
-          }
-          EOF
+          # Verificar si existe settings.gradle o settings.gradle.kts en la raíz, si no, crearlo
+          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
+              echo "Creando settings.gradle.kts por defecto..."
+              cat << 'EOF' > settings.gradle.kts
+              pluginManagement {
+                  repositories {
+                      google()
+                      mavenCentral()
+                      gradlePluginPortal()
+                  }
+              }
+              dependencyResolutionManagement {
+                  repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+                  repositories {
+                      google()
+                      mavenCentral()
+                  }
+              }
+              rootProject.name = "UltraCamPro"
+              include(":app")
+              EOF
+          fi
 
-          # settings.gradle.kts con repositorios seguros (MANTENIDO)
-          cat << 'EOF' > settings.gradle.kts
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
+          # Configurar el build.gradle raíz si no existe
+          if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
+              echo "Creando build.gradle.kts raíz..."
+              cat << 'EOF' > build.gradle.kts
+              plugins {
+                  id("com.android.application") version "8.1.1" apply false
+                  id("org.jetbrains.kotlin.android") version "1.9.0" apply false
               }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "UltraCamPro"
-          include(":app")
-          EOF
-          
-          # gradle.properties universal con AndroidX, Jetifier y memoria (MANTENIDO)
+              EOF
+          fi
+
+          # Configuración universal de gradle.properties
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8
           android.nonTransitiveRClass=true
           EOF
-          
-          # Extraer paquete del AndroidManifest si existe para el namespace
-          MANIFEST_FILE="$APP_PATH/src/main/AndroidManifest.xml"
-          PKG_NAME="com.ultracam.pro"
-          if [ -f "$MANIFEST_FILE" ]; then
-              EXTRACTED_PKG=$(grep -oP 'package="\K[^"]+' "$MANIFEST_FILE" || true)
-              if [ ! -z "$EXTRACTED_PKG" ]; then
-                  PKG_NAME="$EXTRACTED_PKG"
-              fi
-          fi
-          echo "Namespace asignado: $PKG_NAME"
-          
-          # SOLUCIÓN DEFINITIVA: Reemplazar/Crear un build.gradle moderno para el módulo app
-          # Esto evita cualquier error de recursos o SDKs obsoletos en el proyecto original
-          cat << EOF > "$APP_PATH/build.gradle"
-          plugins {
-              id 'com.android.application'
-              id 'org.jetbrains.kotlin.android'
-          }
 
-          android {
-              namespace '$PKG_NAME'
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId "$PKG_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-
-                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.core:core-ktx:1.12.0'
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
-          
-          # Configuración del SDK y local.properties (MANTENIDO)
+          # Configuración del SDK y local.properties
           export ANDROID_HOME=/usr/local/lib/android/sdk
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilación limpia y controlada con volcado completo si llega a fallar
+          # Ejecutar compilación y volcar el log completo si ocurre un error
           ./gradlew clean assembleDebug --no-daemon --stacktrace > build_output.log 2>&1 || {
               echo "=========================================="
-              echo "=== ERROR CRÍTICO DETECTADO EN GRADLE ==="
+              echo "=== ERROR DE COMPILACIÓN DETECTADO ==="
               echo "=========================================="
               tail -n 120 build_output.log
-              
-              FAILED_TASK=$(grep -m 1 "Execution failed for task" build_output.log || echo "Revisar logs detallados arriba")
-              echo "::error::$FAILED_TASK"
               exit 1
           }
 
