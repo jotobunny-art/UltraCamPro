@@ -15,16 +15,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Android SDK Environment & Build
+      - name: Final Build & APK Export
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
           
+          # Detectar la ruta raíz del proyecto dinámicamente
           APP_PATH=$(find extracted_app -name "app" -type d | head -n 1)
           PROJECT_ROOT=$(dirname "$APP_PATH")
           echo "Raíz del proyecto en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
+          # Configurar build.gradle.kts principal
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.1.1" apply false
@@ -32,6 +34,7 @@ jobs:
           }
           EOF
 
+          # Configurar settings.gradle.kts con repositorios estándar
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -51,14 +54,16 @@ jobs:
           include(":app")
           EOF
           
+          # Configurar el SDK de Android y local.properties
           export ANDROID_HOME=/usr/local/lib/android/sdk
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
+          # Inicializar Gradle Wrapper y compilar en modo limpio
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew assembleDebug --console=plain
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
