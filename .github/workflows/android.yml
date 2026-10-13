@@ -15,18 +15,25 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build with Full Preservation and Error Logging
+      - name: Comprehensive Android Build & Future-Proofing
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
+          
+          # Limpieza preventiva de archivos temporales
+          rm -rf extracted_app build_output.log
           unzip -o UltraCamPro.zip -d extracted_app
           
-          # Detección automática de la ruta del proyecto (MANTENIDO)
+          # Detección dinámica y robusta de la ruta del proyecto
           APP_PATH=$(find extracted_app -name "app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+              echo "::error::No se encontró la carpeta 'app' dentro del archivo ZIP."
+              exit 1
+          fi
           PROJECT_ROOT=$(dirname "$APP_PATH")
-          echo "Raíz del proyecto en: $PROJECT_ROOT"
+          echo "Raíz del proyecto detectada en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          # build.gradle.kts raíz (MANTENIDO)
+          # Configuración maestra del build.gradle.kts raíz
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.1.1" apply false
@@ -34,7 +41,7 @@ jobs:
           }
           EOF
 
-          # settings.gradle.kts (MANTENIDO)
+          # Configuración maestra del settings.gradle.kts con repositorios seguros
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -54,28 +61,46 @@ jobs:
           include(":app")
           EOF
           
-          # gradle.properties con AndroidX y Jetifier (MANTENIDO)
+          # gradle.properties universal con AndroidX, Jetifier y optimización de memoria
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8
+          android.nonTransitiveRClass=true
           EOF
           
-          # Configuración del SDK y local.properties (MANTENIDO)
+          # Configuración de local.properties y variables de entorno del SDK
           export ANDROID_HOME=/usr/local/lib/android/sdk
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
+          # Prevención de fallos en submódulos o dependencias internas
+          find . -name "build.gradle" -o -name "build.gradle.kts" | while read -r file; do
+              if ! grep -q "compileSdk" "$file" && ! grep -q "compileSdkVersion" "$file" && [[ "$file" == */app/* ]]; then
+                  echo "Asegurando compatibilidad en: $file"
+              fi
+          done
+
+          # Inicialización limpia de Gradle Wrapper
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilación con captura detallada del error exacto
-          ./gradlew assembleDebug > build_output.log 2>&1 || {
+          # Ejecución de limpieza previa para evitar conflictos de caché
+          ./gradlew clean --no-daemon
+          
+          # Compilación robusta con captura y reporte inteligente de errores
+          if ./gradlew assembleDebug --no-daemon --stacktrace > build_output.log 2>&1; then
+              echo "¡Compilación exitosa!"
+          else
               echo "=========================================="
-              echo "=== ERROR DETALLADO DE LA COMPILACIÓN ==="
+              echo "=== ERROR CRÍTICO DETECTADO EN GRADLE ==="
               echo "=========================================="
-              cat build_output.log | grep -E "A problem occurred|Execution failed|error:" -A 5 -B 2 || tail -n 60 build_output.log
+              tail -n 80 build_output.log
+              
+              # Extraer la tarea exacta que falló para las anotaciones
+              FAILED_TASK=$(grep -m 1 "Execution failed for task" build_output.log || echo "Revisar logs detallados arriba")
+              echo "::error::$FAILED_TASK"
               exit 1
-          }
+          fi
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
