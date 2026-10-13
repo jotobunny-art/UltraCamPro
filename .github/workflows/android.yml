@@ -15,18 +15,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build with Resource Fix & CompileSdk
+      - name: Build with Full Preservation and Error Logging
         run: |
           sudo apt-get update && sudo apt-get install -y unzip gradle
           unzip -o UltraCamPro.zip -d extracted_app
           
-          # Mantenemos la detección automática de la ruta del proyecto
+          # Detección automática de la ruta del proyecto (MANTENIDO)
           APP_PATH=$(find extracted_app -name "app" -type d | head -n 1)
           PROJECT_ROOT=$(dirname "$APP_PATH")
           echo "Raíz del proyecto en: $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           
-          # Mantenemos el build.gradle.kts principal
+          # build.gradle.kts raíz (MANTENIDO)
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.1.1" apply false
@@ -34,7 +34,7 @@ jobs:
           }
           EOF
 
-          # Mantenemos el settings.gradle.kts configurado
+          # settings.gradle.kts (MANTENIDO)
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -54,33 +54,31 @@ jobs:
           include(":app")
           EOF
           
-          # Mantenemos la configuración de AndroidX y Jetifier
+          # gradle.properties con AndroidX y Jetifier (MANTENIDO)
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
-
-          # Solución para processDebugResources: Asegurar compileSdk y namespace correcto en el módulo app
-          APP_BUILD_GRADLE="$APP_PATH/build.gradle.kts"
-          if [ ! -f "$APP_BUILD_GRADLE" ]; then
-              APP_BUILD_GRADLE="$APP_PATH/build.gradle"
-          fi
           
-          echo "Optimizando configuración en: $APP_BUILD_GRADLE"
-          
-          # Si el archivo usa groovy (build.gradle), inyectamos o corregimos los valores si es necesario
-          if [[ "$APP_BUILD_GRADLE" == *.gradle ]]; then
-              sed -i 's/compileSdkVersion.*/compileSdk = 34/g' "$APP_BUILD_GRADLE" || true
-              sed -i 's/targetSdkVersion.*/targetSdk = 34/g' "$APP_BUILD_GRADLE" || true
-          fi
-          
-          # Mantenemos la configuración del SDK y local.properties
+          # Configuración del SDK y local.properties (MANTENIDO)
           export ANDROID_HOME=/usr/local/lib/android/sdk
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           
-          # Compilamos con la corrección aplicada
-          ./gradlew assembleDebug --stacktrace
+          # Compilación con captura detallada del error exacto
+          ./gradlew assembleDebug > build_output.log 2>&1 || {
+              echo "=========================================="
+              echo "=== ERROR DETALLADO DE LA COMPILACIÓN ==="
+              echo "=========================================="
+              cat build_output.log | grep -E "A problem occurred|Execution failed|error:" -A 5 -B 2 || tail -n 60 build_output.log
+              exit 1
+          }
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: '**/app/build/outputs/apk/debug/*.apk'
